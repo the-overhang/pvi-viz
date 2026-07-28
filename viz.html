@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PVI Visualization</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #f9f9f9;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        .logo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+        }
+        h1 {
+            margin-bottom: 30px;
+            padding-right: 120px;
+            font-size: 32px;
+            color: #333;
+        }
+        .filters {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .filter-group {
+            flex: 1;
+            min-width: 250px;
+        }
+        .filter-group label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #333;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+            background-color: white;
+            cursor: pointer;
+        }
+        select:hover {
+            border-color: #999;
+        }
+        select:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+        }
+        #party-select {
+            min-height: 100px;
+        }
+        #chart {
+            width: 100%;
+            height: 600px;
+            margin-top: 20px;
+        }
+        .tip {
+            color: #888;
+            font-size: 12px;
+            margin-top: 20px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="Plainlogo26.svg" class="logo" alt="Logo">
+        
+        <h1>Political Party Index (PVI)</h1>
+        
+        <div class="filters">
+            <div class="filter-group">
+                <label for="electorate-select">Electorate</label>
+                <select id="electorate-select">
+                    <option value="all">All Electorates</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="party-select">Parties</label>
+                <select id="party-select" multiple>
+                </select>
+            </div>
+        </div>
+        
+        <div id="chart"></div>
+        
+        <p class="tip">
+            💡 Tip: Hold Ctrl (or Cmd on Mac) to select multiple parties
+        </p>
+    </div>
+
+    <script>
+        // Data will be loaded and processed here
+        let rawData = [];
+        let colourMap = {};
+        let yearsArray = [];
+        let electoratesArray = [];
+        let partiesArray = [];
+
+        // Function to parse CSV
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            const headers = lines[0].split(',');
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                const obj = {};
+                const currentLine = lines[i].split(',');
+                for (let j = 0; j < headers.length; j++) {
+                    obj[headers[j].trim()] = currentLine[j].trim();
+                }
+                rows.push(obj);
+            }
+            return rows;
+        }
+
+        // Load data
+        Promise.all([
+            fetch('PVI_data.csv').then(r => r.text()).then(text => {
+                rawData = parseCSV(text);
+                rawData.forEach(d => {
+                    d.Year = parseInt(d.Year);
+                    d.PVI = parseFloat(d.PVI);
+                });
+            }),
+            fetch('Colourcodes.csv').then(r => r.text()).then(text => {
+                const colours = parseCSV(text);
+                colours.forEach(c => {
+                    colourMap[c.Party] = c.Colour;
+                });
+            })
+        ]).then(() => {
+            // Extract unique values
+            yearsArray = [...new Set(rawData.map(d => d.Year))].sort((a, b) => a - b);
+            electoratesArray = [...new Set(rawData.map(d => d.Electorate))].sort();
+            partiesArray = [...new Set(rawData.map(d => d.Party))].sort();
+
+            // Populate dropdowns
+            const electorateSelect = document.getElementById('electorate-select');
+            electoratesArray.forEach(electorate => {
+                const option = document.createElement('option');
+                option.value = electorate;
+                option.textContent = electorate;
+                electorateSelect.appendChild(option);
+            });
+
+            const partySelect = document.getElementById('party-select');
+            partiesArray.forEach(party => {
+                const option = document.createElement('option');
+                option.value = party;
+                option.textContent = party;
+                option.selected = true;
+                partySelect.appendChild(option);
+            });
+
+            // Set up event listeners
+            document.getElementById('electorate-select').addEventListener('change', updateChart);
+            document.getElementById('party-select').addEventListener('change', updateChart);
+
+            // Initial plot
+            updateChart();
+        });
+
+        function updateChart() {
+            const selectedElectorate = document.getElementById('electorate-select').value;
+            const selectedParties = Array.from(document.getElementById('party-select').selectedOptions).map(o => o.value);
+
+            // Filter data
+            let filteredData = rawData;
+            if (selectedElectorate !== 'all') {
+                filteredData = filteredData.filter(d => d.Electorate === selectedElectorate);
+            }
+            filteredData = filteredData.filter(d => selectedParties.includes(d.Party));
+
+            // Pivot data for stacked bar chart
+            const pivoted = {};
+            filteredData.forEach(row => {
+                if (!pivoted[row.Year]) {
+                    pivoted[row.Year] = { Year: row.Year };
+                }
+                pivoted[row.Year][row.Party] = row.PVI;
+            });
+
+            // Convert to sorted array
+            const chartData = Object.values(pivoted).sort((a, b) => a.Year - b.Year);
+
+            // Create traces for each party
+            const traces = selectedParties.map(party => {
+                return {
+                    x: chartData.map(d => d.Year),
+                    y: chartData.map(d => d[party] || 0),
+                    name: party,
+                    type: 'bar',
+                    marker: { color: colourMap[party] || '#999' },
+                    hovertemplate: '<b>' + party + '</b><br>Year: %{x}<br>PVI: %{y:.4f}<extra></extra>'
+                };
+            });
+
+            // Create layout
+            const layout = {
+                title: '',
+                barmode: 'relative',
+                xaxis: {
+                    title: 'Year',
+                    tickmode: 'linear',
+                    tick0: Math.min(...yearsArray),
+                    dtick: 1,
+                    showgrid: true,
+                    gridwidth: 1,
+                    gridcolor: 'rgba(200, 200, 200, 0.2)'
+                },
+                yaxis: {
+                    title: 'PVI',
+                    showgrid: true,
+                    gridwidth: 1,
+                    gridcolor: 'rgba(200, 200, 200, 0.2)'
+                },
+                hovermode: 'closest',
+                margin: { l: 60, r: 60, t: 60, b: 60 },
+                height: 600
+            };
+
+            Plotly.newPlot('chart', traces, layout, { responsive: true });
+        }
+    </script>
+</body>
+</html>
