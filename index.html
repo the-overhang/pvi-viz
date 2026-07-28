@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PVI Visualization</title>
+    <title>NZ Partisan Voter Index</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,7 +15,7 @@
             box-sizing: border-box;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background-color: #f9f9f9;
             padding: 20px;
         }
@@ -92,9 +95,9 @@
 <body>
     <div class="container">
         <img src="Plainlogo26.svg" class="logo" alt="Logo">
-        
-        <h1>Political Party Index (PVI)</h1>
-        
+
+        <h1>NZ Partisan Voter Index</h1>
+
         <div class="filters">
             <div class="filter-group">
                 <label for="electorate-select">Electorate</label>
@@ -102,18 +105,18 @@
                     <option value="all">All Electorates</option>
                 </select>
             </div>
-            
+
             <div class="filter-group">
                 <label for="party-select">Parties</label>
                 <select id="party-select" multiple>
                 </select>
             </div>
         </div>
-        
+
         <div id="chart"></div>
-        
+
         <p class="tip">
-            💡 Tip: Hold Ctrl (or Cmd on Mac) to select multiple parties
+            Tip: Hold Ctrl (or Cmd on Mac) to select multiple parties
         </p>
     </div>
 
@@ -219,25 +222,38 @@
                     name: party,
                     type: 'bar',
                     marker: { color: colourMap[party] || '#999' },
-                    hovertemplate: '<b>' + party + '</b><br>Year: %{x}<br>PVI: %{y:.4f}<extra></extra>'
+                    hovertemplate: '<b>' + party + '</b><br>Year: %{x}<br>PVI: %{y:.1%}<extra></extra>'
                 };
             });
+
+            // X-axis ticks every 3 years, starting at 1996, aligned to the bars
+            const minYear = Math.min(...yearsArray);
+            const maxYear = Math.max(...yearsArray);
+            const tickvals = [];
+            for (let y = minYear; y <= maxYear; y += 3) {
+                tickvals.push(y);
+            }
 
             // Create layout
             const layout = {
                 title: '',
                 barmode: 'relative',
+                font: {
+                    family: 'Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif'
+                },
                 xaxis: {
                     title: 'Year',
-                    tickmode: 'linear',
-                    tick0: Math.min(...yearsArray),
-                    dtick: 1,
+                    tickmode: 'array',
+                    tickvals: tickvals,
+                    ticktext: tickvals.map(String),
+                    range: [minYear - 0.5, maxYear + 0.5],
                     showgrid: true,
                     gridwidth: 1,
                     gridcolor: 'rgba(200, 200, 200, 0.2)'
                 },
                 yaxis: {
                     title: 'PVI',
+                    tickformat: '.0%',
                     showgrid: true,
                     gridwidth: 1,
                     gridcolor: 'rgba(200, 200, 200, 0.2)'
